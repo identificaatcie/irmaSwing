@@ -6,8 +6,6 @@ import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JTextField;
 
-import irmaKioskGUI.Controller;
-
 public class LoginScreen extends JFrame {
 private IRMAKiosk controller;
 	public LoginScreen(IRMAKiosk irmaKiosk) {
@@ -16,7 +14,7 @@ private IRMAKiosk controller;
 		JTextField textfield = new JTextField("Please enter your IRMA card in the cardreader");
 		textfield.setEditable(false);
 		this.add(textfield); 
-		d.setSize(Integer.MAX_VALUE, Integer.MAX_VALUE); // lelijke hack voor fullscreen. 
+		d.setSize(500,500); // lelijke hack voor fullscreen.
 		this.setSize(d);
 		this.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
 		this.controller = irmaKiosk;

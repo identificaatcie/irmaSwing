@@ -12,7 +12,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
-import irmaKioskGUI.Controller;
 public class PinScreen extends JFrame {
 	IRMAKiosk c;
 	JTextField pinInput;
@@ -36,7 +35,7 @@ public class PinScreen extends JFrame {
 		this.add(text);
 		this.add(pinInput);
 		this.setLayout(j);
-		this.setSize(Integer.MAX_VALUE, Integer.MAX_VALUE); 
+		this.setSize(500, 500);
 	}
 
 	private void fixPanel(JPanel panel) {

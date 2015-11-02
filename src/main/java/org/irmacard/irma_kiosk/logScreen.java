@@ -2,8 +2,6 @@ package org.irmacard.irma_kiosk;
 
 import javax.swing.JFrame;
 
-import irmaKioskGUI.Controller;
-
 public class logScreen extends JFrame {
 
 	public logScreen(IRMAKiosk irmaKiosk) {

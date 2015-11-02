@@ -8,8 +8,6 @@ import java.awt.Toolkit;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 
-import irmaKioskGUI.Controller;
-
 public class irmaFrame extends JFrame {
 
 	/**
@@ -36,7 +34,7 @@ public class irmaFrame extends JFrame {
 		g.addLayoutComponent("button", button);
 		this.add(button);
 		button.addActionListener(irmaKiosk);
-		this.setSize(Integer.MAX_VALUE, Integer.MAX_VALUE); 
+		this.setSize(500, 500);
 		this.setDefaultCloseOperation(EXIT_ON_CLOSE);		
 	}
 	public JButton getButton()
