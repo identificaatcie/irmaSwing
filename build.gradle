@@ -3,7 +3,7 @@ apply plugin: 'maven'
 apply plugin: 'application'
 
 version = '1.0'
-mainClassName = "org.irmacard.irma_kiosk.IRMAKiosk"
+mainClassName = "org.irmacard.irma_kiosk.Main"
 applicationDefaultJvmArgs = ["-Djava.util.logging.config.file=logging.properties"]
 
 repositories {
