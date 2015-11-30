@@ -1,6 +1,7 @@
 package org.irmacard.irma_kiosk;
 
 import java.awt.event.ActionEvent;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.sf.scuba.smartcards.CardService;
@@ -11,7 +12,6 @@ import org.irmacard.credentials.idemix.IdemixCredentials;
 import org.irmacard.credentials.idemix.IdemixSecretKey;
 import org.irmacard.credentials.idemix.descriptions.IdemixVerificationDescription;
 import org.irmacard.credentials.idemix.info.IdemixKeyStore;
-import org.irmacard.credentials.idemix.smartcard.CardChangedListener;
 import org.irmacard.credentials.idemix.smartcard.IRMACard;
 import org.irmacard.credentials.idemix.smartcard.IRMACardHelper;
 import org.irmacard.credentials.idemix.smartcard.SmartCardEmulatorService;
@@ -44,36 +44,45 @@ import java.util.List;
 import java.awt.event.ActionListener;
 
 import javax.swing.JFrame;
-public class IRMAKiosk implements ActionListener {
-private  JFrame irmaFrame, LoginScreen, logScreen, CredentialScreen, PinScreen;
-private StringBuilder pinCode,x ;
 
-private HttpTransport transport;
-private JsonObjectParser jsonObjectParser;
-private String apikey = "";
-private final Boolean debug = true;
-private CardService cs;
-private IRMACard card;
-private JsonObject result;
-private String PIN;
-private CardTerminal terminal;
+public class IRMAKiosk implements ActionListener, Runnable {
 
-public IRMAKiosk() 
-	{
-		irmaFrame = new irmaFrame(this);
-		LoginScreen = new LoginScreen(this);
-		PinScreen = new PinScreen(this);
-		CredentialScreen = new CredentialScreen(this);
-		logScreen = new logScreen(this);
-		pinCode = new StringBuilder();
-		x = new StringBuilder();
+    private JFrame irmaFrame;
 
+    private HttpTransport transport;
+    private JsonObjectParser jsonObjectParser;
+    private String apikey = "";
+    private final Boolean debug = false;
+    private CardService cs;
+    private IRMACard card;
+    private JsonObject result;
+    private String PIN;
+    private CardTerminal terminal;
+    private volatile boolean progress = false;
+
+    public IRMAKiosk() {
+
+    }
+
+    public void run()
+    {
+        irmaFrame = new irmaFrame();
+        startPanel ip = new startPanel(this);
+        irmaFrame.add(ip);
+        irmaFrame.invalidate();
+        irmaFrame.setVisible(true);
+        waitOnProgress();
+        irmaFrame.remove(ip);
+        PINPanel pinPanel = new PINPanel(this);
+        irmaFrame.add(pinPanel);
+        irmaFrame.invalidate();
+        irmaFrame.setVisible(true);
+        waitOnProgress();
+        PIN = pinPanel.getPassword();
+        irmaFrame.setVisible(false);
 
         transport = new NetHttpTransport.Builder().build();
-
         URI core = new File(System.getProperty("user.dir")).toURI().resolve("irma_configuration/");
-
-
         Path apikeyPath = Paths.get(System.getProperty("user.dir") + "/apikey");
         try {
             apikey = Files.readAllLines(apikeyPath).get(0);
@@ -81,22 +90,19 @@ public IRMAKiosk()
             System.out.println("Apikey file could not be read.");
         }
 
-
         DescriptionStore.setCoreLocation(core);
         IdemixKeyStore.setCoreLocation(core);
 
         //Debug setup
-        PIN="0000";
-        if(debug)
-        {
-                card = new IRMACard();
-                cs = new SmartCardEmulatorService(card);
-                PIN = "0000";
-                IssueThaliaRoot(cs,card);
-                IssueSurfnetRoot(cs, card);
+        PIN = "0000";
+        if (debug) {
+            card = new IRMACard();
+            cs = new SmartCardEmulatorService(card);
+            PIN = "0000";
+            IssueThaliaRoot(cs, card);
+            IssueSurfnetRoot(cs, card);
         }
-        else
-        {
+        else {
             try {
                 cs = getNewCardService();
             } catch (CardException e) {
@@ -104,39 +110,46 @@ public IRMAKiosk()
             }
         }
 
-	}
+        result = verifyThaliaRoot(cs);
+        if(result == null)
+        {
+            System.out.println("Failed to verify by thalia root. Verifying by surfnet root.");
+            result = verifySurfnetRoot(cs);
+            if(result == null)
+            {
+                System.out.println("Failed to verify by surfnet root. Ask the identificaatcie to fix your root credentials.");
+                return;
+            }
+        }
+        System.out.println("Verification succeeded!");
+        issueThaliaCredentials(cs, card, result, PIN);
+        System.out.println("Issue succesful!");
+        //this.notify();
+    }
 
+    public void waitOnProgress()
+    {
+        while(!progress)
+        {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        progress = false;
+    }
 
-	@Override
-	public void actionPerformed(ActionEvent e) {
-		if(e.getActionCommand().equals("START"))
-			{
-				System.out.println("Test");
-				irmaFrame.setVisible(false);
-				LoginScreen.setVisible(true);
-			}
-		if("0123456789".contains(e.getActionCommand())&& e.getActionCommand().length()== 1)
-		{
-			if(pinCode.length()<4){
-			pinCode.append(e.getActionCommand());
-			x.append("x");
-			((PinScreen) PinScreen).getTextfield().setText(x.toString());
-			}
-		}
-		if(e.getActionCommand().equals("enter"))
-		{
-			System.out.println(pinCode);
-			}
-		if(e.getActionCommand().equals("C"))
-		{
-			if(pinCode.length() >0)
-			{
-				pinCode.deleteCharAt(pinCode.length()-1);
-				x.deleteCharAt(x.length()-1);
-				((PinScreen) PinScreen).getTextfield().setText(x.toString());
-			}
-		}
-	}
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        if (e.getActionCommand().equals("START")) {
+            progress = true;
+        }
+        else if (e.getActionCommand().equals("Enter"))
+        {
+            progress = true;
+        }
+    }
 
     public CardService getPCSCCardService() throws InfoException, IllegalArgumentException {
         List<CardTerminal> terminalList;
@@ -145,7 +158,7 @@ public IRMAKiosk()
         } catch (CardException e) {
             throw new InfoException("No card readers connected.");
         }
-        if(!terminalList.isEmpty()) {
+        if (!terminalList.isEmpty()) {
             int readerNr = 0;
 
             try {
@@ -177,7 +190,6 @@ public IRMAKiosk()
         // For real pcsc smartcard
 
 
-
 //        emu.addListener(new CardChangedListener() {
 //            @Override
 //            public void cardChanged(IRMACard card) {
@@ -185,7 +197,8 @@ public IRMAKiosk()
 //            }
 //        });
     }
-    public void issueThaliaCredentials(CardService cs, IRMACard card, JsonObject result,String PIN) {
+
+    public void issueThaliaCredentials(CardService cs, IRMACard card, JsonObject result, String PIN) {
 
         //Issue Membership attribute
         try {
@@ -195,28 +208,19 @@ public IRMAKiosk()
             // Setup the attributes that will be issued to the card
             Attributes attributes = new Attributes();
             String membership_type = result.get("membership_type").getAsString();
-            if(membership_type.contains("Membership"))
-            {
+            if (membership_type.contains("Membership")) {
                 attributes.add("isMember", "yes".getBytes());
-            }
-            else
-            {
+            } else {
                 attributes.add("isMember", "no".getBytes());
             }
-            if(membership_type.contains("Honorary"))
-            {
+            if (membership_type.contains("Honorary")) {
                 attributes.add("isHonoraryMember", "yes".getBytes());
-            }
-            else
-            {
+            } else {
                 attributes.add("isHonoraryMember", "no".getBytes());
             }
-            if(membership_type.contains("Benefactor"))
-            {
+            if (membership_type.contains("Benefactor")) {
                 attributes.add("isBegunstiger", "yes".getBytes());
-            }
-            else
-            {
+            } else {
                 attributes.add("isBegunstiger", "no".getBytes());
             }
             // Setup a connection and send pin for emulated card service
@@ -224,7 +228,7 @@ public IRMAKiosk()
             IdemixCredentials ic = new IdemixCredentials(is);
             ic.connect();
             is.sendPin(PIN.getBytes());
-            System.out.println("ISK± " + isk + "attributes± " + attributes + "cd± " + cd);
+            System.out.println("ISKï¿½ " + isk + "attributesï¿½ " + attributes + "cdï¿½ " + cd);
             ic.issue(cd, isk, attributes, null); // null indicates default expiry
 //            final Path path = Paths.get(System.getProperty("user.dir"), "card.json");
 //            IRMACardHelper.storeState(card, path);
@@ -239,19 +243,16 @@ public IRMAKiosk()
             IdemixSecretKey isk = IdemixKeyStore.getInstance().getSecretKey(cd);
             // Setup the attributes that will be issued to the card
             Attributes attributes = new Attributes();
-            String bday =  result.get("birthday").getAsString();
+            String bday = result.get("birthday").getAsString();
             System.out.println(bday);
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
             LocalDateTime birthday = LocalDateTime.parse(bday, formatter);
             birthday = birthday.plusYears(18);
-            if (birthday.isBefore(LocalDateTime.now()))
-            {
+            if (birthday.isBefore(LocalDateTime.now())) {
                 System.out.println("Je bent meerderjarig!");
-                attributes.add("over18","yes".getBytes());
-            }
-            else
-            {
-                attributes.add("over18","no".getBytes());
+                attributes.add("over18", "yes".getBytes());
+            } else {
+                attributes.add("over18", "no".getBytes());
             }
             // Setup a connection and send pin for emulated card service
             IdemixService is = new IdemixService(cs);
@@ -328,5 +329,72 @@ public IRMAKiosk()
             e.printStackTrace();
         }
 
+    }
+
+    public JsonObject verifySurfnetRoot(CardService cs) {
+        try {
+
+            IdemixVerificationDescription vd = new IdemixVerificationDescription(
+                    "Surfnet", "rootAll");
+            Attributes attr = new IdemixCredentials(cs).verify(vd);
+
+            String SurfnetRoot = new String(attr.get("userID"));
+            String mode = "student_number";
+            String value = SurfnetRoot.substring(0,8);
+
+            StringBuilder sb = new StringBuilder();
+            Formatter formatter = new Formatter(sb);
+            formatter.format("https://thalia.nu/api/irma_api.php?apikey=%s&%s=%s",apikey,mode,value);
+            HttpResponse response = transport.createRequestFactory().buildGetRequest(new GenericUrl(sb.toString())).execute();
+            JsonParser jp = new JsonParser();
+
+            JsonObject jo = jp.parse(response.parseAsString()).getAsJsonObject();
+            if(jo.get("status").getAsString().equals("ok"))
+            {
+                return jo;
+            }
+
+
+        } catch (InfoException e) {
+            e.printStackTrace();
+        } catch (CredentialsException e) {
+            return null;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public JsonObject verifyThaliaRoot(CardService cs) {
+        try {
+
+            IdemixVerificationDescription vd = new IdemixVerificationDescription(
+                    "Thalia", "rootAll");
+            Attributes attr = new IdemixCredentials(cs).verify(vd);
+
+            String ThaliaUser = new String(attr.get("userID"));
+            String mode = "thalia_username";
+
+            StringBuilder sb = new StringBuilder();
+            Formatter formatter = new Formatter(sb);
+            formatter.format("https://thalia.nu/api/irma_api.php?apikey=%s&%s=%s",apikey,mode,ThaliaUser);
+            HttpResponse response = transport.createRequestFactory().buildGetRequest(new GenericUrl(sb.toString())).execute();
+            JsonParser jp = new JsonParser();
+
+            JsonObject jo = jp.parse(response.parseAsString()).getAsJsonObject();
+            if(jo.get("status").getAsString().equals("ok"))
+            {
+                return jo;
+            }
+
+
+        } catch (InfoException e) {
+            e.printStackTrace();
+        } catch (CredentialsException e) {
+            return null;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 }
