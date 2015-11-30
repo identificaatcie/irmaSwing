@@ -48,6 +48,7 @@ import javax.swing.JFrame;
 public class IRMAKiosk implements ActionListener, Runnable {
 
     private JFrame irmaFrame;
+    private ProgressPanel progressPanel;
 
     private HttpTransport transport;
     private JsonObjectParser jsonObjectParser;
@@ -79,7 +80,12 @@ public class IRMAKiosk implements ActionListener, Runnable {
         irmaFrame.setVisible(true);
         waitOnProgress();
         PIN = pinPanel.getPassword();
-        irmaFrame.setVisible(false);
+        irmaFrame.remove(pinPanel);
+        progressPanel = new ProgressPanel(this);
+        irmaFrame.add(progressPanel);
+        irmaFrame.invalidate();
+        irmaFrame.setVisible(true);
+
 
         transport = new NetHttpTransport.Builder().build();
         URI core = new File(System.getProperty("user.dir")).toURI().resolve("irma_configuration/");
@@ -87,7 +93,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
         try {
             apikey = Files.readAllLines(apikeyPath).get(0);
         } catch (IOException e) {
-            System.out.println("Apikey file could not be read.");
+            progressPanel.addLine("Apikey file could not be read.");
         }
 
         DescriptionStore.setCoreLocation(core);
@@ -114,19 +120,19 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
         if(result == null)
         {
-            System.out.println("Failed to verify by thalia root. Verifying by surfnet root.");
+            progressPanel.addLine("Failed to verify by thalia root. Verifying by surfnet root.");
             result = verifySurfnetRoot(cs);
             if(result == null)
             {
-                System.out.println("Failed to verify by surfnet root. Ask the identificaatcie to fix your root credentials.");
+                progressPanel.addLine("Failed to verify by surfnet root. Ask the identificaatcie to fix your root credentials.");
                 return;
             }
         }
-        System.out.println("Verification succeeded!");
+        progressPanel.addLine("Verification succeeded!");
         issueThaliaRoot(result.get("username").getAsString(), cs, card);
         issueThaliaCredentials(cs, card, result, PIN);
-        System.out.println("Issue succesful!");
-        //this.notify();
+        progressPanel.addLine("Issues succesful!");
+        waitOnProgress();
     }
 
     public void waitOnProgress()
@@ -148,6 +154,10 @@ public class IRMAKiosk implements ActionListener, Runnable {
             progress = true;
         }
         else if (e.getActionCommand().equals("Enter"))
+        {
+            progress = true;
+        }
+        else if (e.getActionCommand().equals("Done"))
         {
             progress = true;
         }
@@ -230,7 +240,6 @@ public class IRMAKiosk implements ActionListener, Runnable {
             IdemixCredentials ic = new IdemixCredentials(is);
             ic.connect();
             is.sendPin(PIN.getBytes());
-            System.out.println("ISK� " + isk + "attributes� " + attributes + "cd� " + cd);
             ic.issue(cd, isk, attributes, null); // null indicates default expiry
 //            final Path path = Paths.get(System.getProperty("user.dir"), "card.json");
 //            IRMACardHelper.storeState(card, path);
@@ -246,12 +255,11 @@ public class IRMAKiosk implements ActionListener, Runnable {
             // Setup the attributes that will be issued to the card
             Attributes attributes = new Attributes();
             String bday = result.get("birthday").getAsString();
-            System.out.println(bday);
+            progressPanel.addLine(bday);
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
             LocalDateTime birthday = LocalDateTime.parse(bday, formatter);
             birthday = birthday.plusYears(18);
             if (birthday.isBefore(LocalDateTime.now())) {
-                System.out.println("Je bent meerderjarig!");
                 attributes.add("over18", "yes".getBytes());
             } else {
                 attributes.add("over18", "no".getBytes());
