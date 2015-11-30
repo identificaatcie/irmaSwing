@@ -7,11 +7,6 @@ import javax.swing.*;
 
 public class startPanel extends JPanel {
 
-	/**
-	 * 
-	 * 
-	 */
-	private static final long serialVersionUID = 7630860552149910776L;
 	private JButton button;
 /**
  * @param irmaKiosk

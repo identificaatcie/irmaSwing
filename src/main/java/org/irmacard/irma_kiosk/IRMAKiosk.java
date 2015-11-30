@@ -1,5 +1,6 @@
 package org.irmacard.irma_kiosk;
 
+import java.awt.*;
 import java.awt.event.ActionEvent;
 
 import com.google.gson.JsonObject;
@@ -27,6 +28,7 @@ import com.google.api.client.json.JsonObjectParser;
 import javax.smartcardio.CardException;
 import javax.smartcardio.CardTerminal;
 import javax.smartcardio.TerminalFactory;
+import java.awt.geom.GeneralPath;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -67,7 +69,11 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
     public void run()
     {
+        GraphicsDevice graphicsDevice = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+
         irmaFrame = new irmaFrame();
+        graphicsDevice.setFullScreenWindow(irmaFrame);
+
         startPanel ip = new startPanel(this);
         irmaFrame.add(ip);
         irmaFrame.invalidate();
