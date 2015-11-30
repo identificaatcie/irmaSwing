@@ -52,7 +52,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
     private HttpTransport transport;
     private JsonObjectParser jsonObjectParser;
     private String apikey = "";
-    private final Boolean debug = false;
+    private final Boolean debug = true;
     private CardService cs;
     private IRMACard card;
     private JsonObject result;
@@ -99,7 +99,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
             card = new IRMACard();
             cs = new SmartCardEmulatorService(card);
             PIN = "0000";
-            IssueThaliaRoot(cs, card);
+            issueThaliaRoot("wkuipers", cs, card);
             IssueSurfnetRoot(cs, card);
         }
         else {
@@ -111,6 +111,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
         }
 
         result = verifyThaliaRoot(cs);
+
         if(result == null)
         {
             System.out.println("Failed to verify by thalia root. Verifying by surfnet root.");
@@ -122,6 +123,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
             }
         }
         System.out.println("Verification succeeded!");
+        issueThaliaRoot(result.get("username").getAsString(), cs, card);
         issueThaliaCredentials(cs, card, result, PIN);
         System.out.println("Issue succesful!");
         //this.notify();
@@ -269,7 +271,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
     }
 
-    public void IssueThaliaRoot(CardService cs, IRMACard card) {
+    public void issueThaliaRoot(String username, CardService cs, IRMACard card) {
 
         try {
             CredentialDescription cd = DescriptionStore.getInstance().
@@ -279,14 +281,14 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
             // Setup the attributes that will be issued to the card
             Attributes attributes = new Attributes();
-            attributes.add("userID", "wkuipers".getBytes());
+            attributes.add("userID", username.getBytes());
 
             // Setup a connection and send pin for emulated card service
             IdemixService is = new IdemixService(cs);
             IdemixCredentials ic = new IdemixCredentials(is);
             ic.connect();
 
-            is.sendPin("0000".getBytes());
+            is.sendPin(PIN.getBytes());
             ic.issue(cd, isk, attributes, null); // null indicates default expiry
 
 
