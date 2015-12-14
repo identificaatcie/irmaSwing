@@ -28,7 +28,6 @@ import com.google.api.client.json.JsonObjectParser;
 import javax.smartcardio.CardException;
 import javax.smartcardio.CardTerminal;
 import javax.smartcardio.TerminalFactory;
-import java.awt.geom.GeneralPath;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -51,6 +50,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
     private JFrame irmaFrame;
     private ProgressPanel progressPanel;
+    private PINPanel pinPanel;
 
     private HttpTransport transport;
     private JsonObjectParser jsonObjectParser;
@@ -71,16 +71,16 @@ public class IRMAKiosk implements ActionListener, Runnable {
     {
         GraphicsDevice graphicsDevice = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
 
-        irmaFrame = new irmaFrame();
-        graphicsDevice.setFullScreenWindow(irmaFrame);
+        irmaFrame = new IrmaFrame();
+        //graphicsDevice.setFullScreenWindow(irmaFrame);
 
-        startPanel ip = new startPanel(this);
-        irmaFrame.add(ip);
+        StartPanel startPanel = new StartPanel(this);
+        irmaFrame.add(startPanel);
         irmaFrame.invalidate();
         irmaFrame.setVisible(true);
         waitOnProgress();
-        irmaFrame.remove(ip);
-        PINPanel pinPanel = new PINPanel(this);
+        irmaFrame.remove(startPanel);
+        pinPanel = new PINPanel(this);
         irmaFrame.add(pinPanel);
         irmaFrame.invalidate();
         irmaFrame.setVisible(true);
@@ -100,19 +100,30 @@ public class IRMAKiosk implements ActionListener, Runnable {
             apikey = Files.readAllLines(apikeyPath).get(0);
         } catch (IOException e) {
             progressPanel.addLine("Apikey file could not be read.");
+            waitOnProgress();
+            return;
         }
 
         DescriptionStore.setCoreLocation(core);
         IdemixKeyStore.setCoreLocation(core);
 
         //Debug setup
-        PIN = "0000";
         if (debug) {
             card = new IRMACard();
             cs = new SmartCardEmulatorService(card);
             PIN = "0000";
-            issueThaliaRoot("wkuipers", cs, card);
-            IssueSurfnetRoot(cs, card);
+            try
+            {
+                issueThaliaRoot("wkuipers", cs, card);
+                IssueSurfnetRoot(cs, card);
+            } catch (CredentialsException e) {
+                progressPanel.addLine("Issuing failed. Perhaps the PIN code was wrong.");
+                waitOnProgress();
+                return;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
         }
         else {
             try {
@@ -122,22 +133,54 @@ public class IRMAKiosk implements ActionListener, Runnable {
             }
         }
 
-        result = verifyThaliaRoot(cs);
+        if(cs == null)
+        {
+            progressPanel.addLine("Cardreader problem: Did you insert your card?");
+            waitOnProgress();
+            return;
+        }
+        try {
+            progressPanel.addLine("Verifying Thalia root...");
+            result = verifyThaliaRoot(cs);
+        } catch (CredentialsException e) {
+            progressPanel.addLine("Verification of Thalia Root failed. Perhaps the PIN code was wrong.");
+            waitOnProgress();
+            return;
+        }
 
         if(result == null)
         {
             progressPanel.addLine("Failed to verify by thalia root. Verifying by surfnet root.");
-            result = verifySurfnetRoot(cs);
+            try {
+                progressPanel.addLine("Verifying by Surfnet root...");
+                result = verifySurfnetRoot(cs);
+            } catch (CredentialsException e) {
+                progressPanel.addLine("Verification of Surfnet Root failed. Perhaps the PIN code was wrong.");
+                waitOnProgress();
+                return;
+            }
             if(result == null)
             {
                 progressPanel.addLine("Failed to verify by surfnet root. Ask the identificaatcie to fix your root credentials.");
+                waitOnProgress();
                 return;
             }
         }
         progressPanel.addLine("Verification succeeded!");
-        issueThaliaRoot(result.get("username").getAsString(), cs, card);
-        issueThaliaCredentials(cs, card, result, PIN);
+        try {
+            progressPanel.addLine("Issuing Thalia credentials...");
+            issueThaliaRoot(result.get("username").getAsString(), cs, card);
+            issueThaliaCredentials(cs, card, result);
+        } catch (CredentialsException e) {
+            progressPanel.addLine("Issuing failed. Perhaps the PIN code was wrong.");
+            waitOnProgress();
+            return;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         progressPanel.addLine("Issues succesful!");
+        progressPanel.addLine("Done!");
         waitOnProgress();
     }
 
@@ -161,7 +204,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
         }
         else if (e.getActionCommand().equals("Enter"))
         {
-            progress = true;
+            progress = pinPanel.passwordReady();
         }
         else if (e.getActionCommand().equals("Done"))
         {
@@ -216,107 +259,93 @@ public class IRMAKiosk implements ActionListener, Runnable {
 //        });
     }
 
-    public void issueThaliaCredentials(CardService cs, IRMACard card, JsonObject result, String PIN) {
+    public void issueThaliaCredentials(CardService cs, IRMACard card, JsonObject result) throws CredentialsException, Exception {
 
         //Issue Membership attribute
-        try {
-            CredentialDescription cd = DescriptionStore.getInstance().
-                    getCredentialDescriptionByName("Thalia", "membership");
-            IdemixSecretKey isk = IdemixKeyStore.getInstance().getSecretKey(cd);
-            // Setup the attributes that will be issued to the card
-            Attributes attributes = new Attributes();
-            String membership_type = result.get("membership_type").getAsString();
-            if (membership_type.contains("Membership")) {
-                attributes.add("isMember", "yes".getBytes());
-            } else {
-                attributes.add("isMember", "no".getBytes());
-            }
-            if (membership_type.contains("Honorary")) {
-                attributes.add("isHonoraryMember", "yes".getBytes());
-            } else {
-                attributes.add("isHonoraryMember", "no".getBytes());
-            }
-            if (membership_type.contains("Benefactor")) {
-                attributes.add("isBegunstiger", "yes".getBytes());
-            } else {
-                attributes.add("isBegunstiger", "no".getBytes());
-            }
-            // Setup a connection and send pin for emulated card service
-            IdemixService is = new IdemixService(cs);
-            IdemixCredentials ic = new IdemixCredentials(is);
-            ic.connect();
-            is.sendPin(PIN.getBytes());
-            ic.issue(cd, isk, attributes, null); // null indicates default expiry
+        CredentialDescription cd = DescriptionStore.getInstance().
+                getCredentialDescriptionByName("Thalia", "membership");
+        IdemixSecretKey isk = IdemixKeyStore.getInstance().getSecretKey(cd);
+        // Setup the attributes that will be issued to the card
+        Attributes attributes = new Attributes();
+        String membership_type = result.get("membership_type").getAsString();
+        if (membership_type.contains("Membership")) {
+            attributes.add("isMember", "yes".getBytes());
+        } else {
+            attributes.add("isMember", "no".getBytes());
+        }
+        if (membership_type.contains("Honorary")) {
+            attributes.add("isHonoraryMember", "yes".getBytes());
+        } else {
+            attributes.add("isHonoraryMember", "no".getBytes());
+        }
+        if (membership_type.contains("Benefactor")) {
+            attributes.add("isBegunstiger", "yes".getBytes());
+        } else {
+            attributes.add("isBegunstiger", "no".getBytes());
+        }
+        // Setup a connection and send pin for emulated card service
+        IdemixService is = new IdemixService(cs);
+        IdemixCredentials ic = new IdemixCredentials(is);
+        ic.connect();
+        is.sendPin(PIN.getBytes());
+        ic.issue(cd, isk, attributes, null); // null indicates default expiry
 //            final Path path = Paths.get(System.getProperty("user.dir"), "card.json");
 //            IRMACardHelper.storeState(card, path);
 
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
         //Issue over18 attribute
-        try {
-            CredentialDescription cd = DescriptionStore.getInstance().
-                    getCredentialDescriptionByName("Thalia", "age");
-            IdemixSecretKey isk = IdemixKeyStore.getInstance().getSecretKey(cd);
-            // Setup the attributes that will be issued to the card
-            Attributes attributes = new Attributes();
-            String bday = result.get("birthday").getAsString();
-            progressPanel.addLine(bday);
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            LocalDateTime birthday = LocalDateTime.parse(bday, formatter);
-            birthday = birthday.plusYears(18);
-            if (birthday.isBefore(LocalDateTime.now())) {
-                attributes.add("over18", "yes".getBytes());
-            } else {
-                attributes.add("over18", "no".getBytes());
-            }
-            // Setup a connection and send pin for emulated card service
-            IdemixService is = new IdemixService(cs);
-            IdemixCredentials ic = new IdemixCredentials(is);
-            ic.connect();
-            is.sendPin(PIN.getBytes());
-            ic.issue(cd, isk, attributes, null); // null indicates default expiry
-            final Path path = Paths.get(System.getProperty("user.dir"), "card.json");
-            IRMACardHelper.storeState(card, path);
-
-        } catch (Exception e) {
-            e.printStackTrace();
+        cd = DescriptionStore.getInstance().
+                getCredentialDescriptionByName("Thalia", "age");
+        isk = IdemixKeyStore.getInstance().getSecretKey(cd);
+        // Setup the attributes that will be issued to the card
+        attributes = new Attributes();
+        String bday = result.get("birthday").getAsString();
+        progressPanel.addLine(bday);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        LocalDateTime birthday = LocalDateTime.parse(bday, formatter);
+        birthday = birthday.plusYears(18);
+        if (birthday.isBefore(LocalDateTime.now())) {
+            attributes.add("over18", "yes".getBytes());
+        } else {
+            attributes.add("over18", "no".getBytes());
         }
+        // Setup a connection and send pin for emulated card service
+        is = new IdemixService(cs);
+        ic = new IdemixCredentials(is);
+        ic.connect();
+        is.sendPin(PIN.getBytes());
+        ic.issue(cd, isk, attributes, null); // null indicates default expiry
+        final Path path = Paths.get(System.getProperty("user.dir"), "card.json");
+        IRMACardHelper.storeState(card, path);
 
     }
 
-    public void issueThaliaRoot(String username, CardService cs, IRMACard card) {
+    public void issueThaliaRoot(String username, CardService cs, IRMACard card) throws CredentialsException, Exception {
 
-        try {
-            CredentialDescription cd = DescriptionStore.getInstance().
-                    getCredentialDescriptionByName("Thalia", "root");
-            IdemixSecretKey isk = IdemixKeyStore.getInstance().getSecretKey(cd);
-
-
-            // Setup the attributes that will be issued to the card
-            Attributes attributes = new Attributes();
-            attributes.add("userID", username.getBytes());
-
-            // Setup a connection and send pin for emulated card service
-            IdemixService is = new IdemixService(cs);
-            IdemixCredentials ic = new IdemixCredentials(is);
-            ic.connect();
-
-            is.sendPin(PIN.getBytes());
-            ic.issue(cd, isk, attributes, null); // null indicates default expiry
+        CredentialDescription cd = DescriptionStore.getInstance().
+                getCredentialDescriptionByName("Thalia", "root");
+        IdemixSecretKey isk = IdemixKeyStore.getInstance().getSecretKey(cd);
 
 
-            final Path path = Paths.get(System.getProperty("user.dir"), "card.json");
-            IRMACardHelper.storeState(card, path);
+        // Setup the attributes that will be issued to the card
+        Attributes attributes = new Attributes();
+        attributes.add("userID", username.getBytes());
 
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        // Setup a connection and send pin for emulated card service
+        IdemixService is = new IdemixService(cs);
+        IdemixCredentials ic = new IdemixCredentials(is);
+        ic.connect();
+
+        is.sendPin(PIN.getBytes());
+        ic.issue(cd, isk, attributes, null); // null indicates default expiry
+
+
+        final Path path = Paths.get(System.getProperty("user.dir"), "card.json");
+        IRMACardHelper.storeState(card, path);
 
 
     }
 
-    public void IssueSurfnetRoot(CardService cs, IRMACard card) {
+    public void IssueSurfnetRoot(CardService cs, IRMACard card) throws CredentialsException{
 
         try {
             CredentialDescription cd = DescriptionStore.getInstance().
@@ -334,7 +363,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
             IdemixCredentials ic = new IdemixCredentials(is);
             ic.connect();
 
-            is.sendPin("0000".getBytes());
+            is.sendPin(PIN.getBytes());
             ic.issue(cd, isk, attributes, null); // null indicates default expiry
 
 
@@ -347,7 +376,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
     }
 
-    public JsonObject verifySurfnetRoot(CardService cs) {
+    public JsonObject verifySurfnetRoot(CardService cs) throws CredentialsException{
         try {
 
             IdemixVerificationDescription vd = new IdemixVerificationDescription(
@@ -381,7 +410,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
         return null;
     }
 
-    public JsonObject verifyThaliaRoot(CardService cs) {
+    public JsonObject verifyThaliaRoot(CardService cs) throws CredentialsException{
         try {
 
             IdemixVerificationDescription vd = new IdemixVerificationDescription(
