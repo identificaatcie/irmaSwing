@@ -6,6 +6,7 @@ import java.awt.event.ActionEvent;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.sf.scuba.smartcards.CardService;
+import net.sf.scuba.smartcards.CardServiceException;
 import net.sf.scuba.smartcards.TerminalCardService;
 import org.irmacard.credentials.Attributes;
 import org.irmacard.credentials.CredentialsException;
@@ -120,9 +121,12 @@ public class IRMAKiosk implements ActionListener, Runnable {
                 progressPanel.addLine("Issuing failed. Perhaps the PIN code was wrong.");
                 waitOnProgress();
                 return;
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (InfoException e) {
+                progressPanel.addLine("Issuing failed. Contct the Identificaatcie");
+            } catch (CardServiceException e) {
+                progressPanel.addLine("Issuing failed. Contct the Identificaatcie");
             }
+
 
         }
         else {
@@ -175,8 +179,10 @@ public class IRMAKiosk implements ActionListener, Runnable {
             progressPanel.addLine("Issuing failed. Perhaps the PIN code was wrong.");
             waitOnProgress();
             return;
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (InfoException e) {
+            progressPanel.addLine("Issuing failed. Contct the Identificaatcie");
+        } catch (CardServiceException e) {
+            progressPanel.addLine("Issuing failed. Contct the Identificaatcie");
         }
 
         progressPanel.addLine("Issues succesful!");
@@ -259,7 +265,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
 //        });
     }
 
-    public void issueThaliaCredentials(CardService cs, IRMACard card, JsonObject result) throws CredentialsException, Exception {
+    public void issueThaliaCredentials(CardService cs, IRMACard card, JsonObject result) throws CredentialsException, InfoException, CardServiceException {
 
         //Issue Membership attribute
         CredentialDescription cd = DescriptionStore.getInstance().
@@ -319,7 +325,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
     }
 
-    public void issueThaliaRoot(String username, CardService cs, IRMACard card) throws CredentialsException, Exception {
+    public void issueThaliaRoot(String username, CardService cs, IRMACard card) throws CredentialsException, InfoException, CardServiceException {
 
         CredentialDescription cd = DescriptionStore.getInstance().
                 getCredentialDescriptionByName("Thalia", "root");
