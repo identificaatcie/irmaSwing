@@ -199,6 +199,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
             progressPanel.addLine("Issuing Thalia credentials...");
             issueThaliaRoot(result.get("username").getAsString(), cs, card);
             issueThaliaCredentials(cs, card, result);
+            IssueThalia(cs, card, result);
         } catch (CredentialsException e) {
             progressPanel.addLine("Issuing failed. Perhaps the PIN code was wrong.");
             waitOnProgress();
@@ -379,36 +380,69 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
     }
 
-    public void IssueSurfnetRoot(CardService cs, IRMACard card) throws CredentialsException{
+    public void IssueSurfnetRoot(CardService cs, IRMACard card) throws CredentialsException, InfoException, CardServiceException {
 
-        try {
-            CredentialDescription cd = DescriptionStore.getInstance().
-                    getCredentialDescriptionByName("Surfnet", "root");
-            IdemixSecretKey isk = IdemixKeyStore.getInstance().getSecretKey(cd);
-
-
-            // Setup the attributes that will be issued to the card
-            Attributes attributes = new Attributes();
-            attributes.add("userID", "s4317904@student.ru.nl".getBytes());
-            attributes.add("securityHash", "DEADBEEF".getBytes());
-
-            // Setup a connection and send pin for emulated card service
-            IdemixService is = new IdemixService(cs);
-            IdemixCredentials ic = new IdemixCredentials(is);
-            ic.connect();
-
-            is.sendPin(PIN.getBytes());
-            ic.issue(cd, isk, attributes, null); // null indicates default expiry
+        CredentialDescription cd = DescriptionStore.getInstance().
+                getCredentialDescriptionByName("Surfnet", "root");
+        IdemixSecretKey isk = IdemixKeyStore.getInstance().getSecretKey(cd);
 
 
-            // Setup a connection to a real card
+        // Setup the attributes that will be issued to the card
+        Attributes attributes = new Attributes();
+        attributes.add("userID", "s4317904@student.ru.nl".getBytes());
+        attributes.add("securityHash", "DEADBEEF".getBytes());
+
+        // Setup a connection and send pin for emulated card service
+        IdemixService is = new IdemixService(cs);
+        IdemixCredentials ic = new IdemixCredentials(is);
+        ic.connect();
+
+        is.sendPin(PIN.getBytes());
+        ic.issue(cd, isk, attributes, null); // null indicates default expiry
+
+
+        // Setup a connection to a real card
 //            CardService real = new TerminalCardService();   <--- doesn't exist?
 
-        } catch (Exception e) {
-            e.printStackTrace();
+    }
+
+    public void IssueThalia(CardService cs, IRMACard card, JsonObject result) throws CredentialsException, InfoException, CardServiceException {
+
+        CredentialDescription cd = DescriptionStore.getInstance().
+                getCredentialDescriptionByName("Thalia", "thalia");
+        IdemixSecretKey isk = IdemixKeyStore.getInstance().getSecretKey(cd);
+
+        String userID = result.get("username").getAsString();
+        String bday = result.get("birthday").getAsString();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        LocalDateTime birthday = LocalDateTime.parse(bday, formatter);
+        birthday = birthday.plusYears(18);
+        String over18 = "no";
+        if (birthday.isBefore(LocalDateTime.now())) {
+            over18 = "yes";
         }
+        String memberType = result.get("membership_type").getAsString();
+
+        // Setup the attributes that will be issued to the card
+        Attributes attributes = new Attributes();
+        attributes.add("userID", userID.getBytes());
+        attributes.add("over18", over18.getBytes());
+        attributes.add("memberType", memberType.getBytes());
+
+        // Setup a connection and send pin for emulated card service
+        IdemixService is = new IdemixService(cs);
+        IdemixCredentials ic = new IdemixCredentials(is);
+        ic.connect();
+
+        is.sendPin(PIN.getBytes());
+        ic.issue(cd, isk, attributes, null); // null indicates default expiry
+
+
+        // Setup a connection to a real card
+//            CardService real = new TerminalCardService();   <--- doesn't exist?
 
     }
+
 
     public JsonObject verifySurfnetRoot(CardService cs) throws CredentialsException, InfoException, IOException {
 
