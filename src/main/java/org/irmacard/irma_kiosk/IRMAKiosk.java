@@ -382,7 +382,10 @@ public class IRMAKiosk implements ActionListener, Runnable {
             IdemixVerificationDescription vd = new IdemixVerificationDescription(
                     "Surfnet", "rootAll");
             Attributes attr = new IdemixCredentials(cs).verify(vd);
-
+            if (attr == null)
+            {
+                throw new CredentialsException();
+            }
             String SurfnetRoot = new String(attr.get("userID"));
             String mode = "student_number";
             String value = SurfnetRoot.substring(0,8);
@@ -416,7 +419,10 @@ public class IRMAKiosk implements ActionListener, Runnable {
             IdemixVerificationDescription vd = new IdemixVerificationDescription(
                     "Thalia", "rootAll");
             Attributes attr = new IdemixCredentials(cs).verify(vd);
-
+            if (attr == null)
+            {
+                throw new CredentialsException();
+            }
             String ThaliaUser = new String(attr.get("userID"));
             String mode = "thalia_username";
 
