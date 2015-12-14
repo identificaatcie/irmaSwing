@@ -122,11 +122,11 @@ public class IRMAKiosk implements ActionListener, Runnable {
                 waitOnProgress();
                 return;
             } catch (InfoException e) {
-                progressPanel.addLine("Issuing failed. Contct the Identificaatcie");
+                progressPanel.addLine("Issuing failed. Contact the Identificaatcie");
                 waitOnProgress();
                 return;
             } catch (CardServiceException e) {
-                progressPanel.addLine("Issuing failed. Contct the Identificaatcie");
+                progressPanel.addLine("Issuing failed. Contact the Identificaatcie");
                 waitOnProgress();
                 return;
             }
@@ -149,7 +149,17 @@ public class IRMAKiosk implements ActionListener, Runnable {
         }
         try {
             progressPanel.addLine("Verifying Thalia root...");
-            result = verifyThaliaRoot(cs);
+            try {
+                result = verifyThaliaRoot(cs);
+            } catch (InfoException e) {
+                progressPanel.addLine("Verifying failed with InfoException. Contact the identificaatcie");
+                waitOnProgress();
+                return;
+            } catch (IOException e) {
+                progressPanel.addLine("Verifying failed with IOException Contact the identificaatcie");
+                waitOnProgress();
+                return;
+            }
         } catch (CredentialsException e) {
             progressPanel.addLine("Verification of Thalia Root failed. Perhaps the PIN code was wrong.");
             waitOnProgress();
@@ -161,7 +171,17 @@ public class IRMAKiosk implements ActionListener, Runnable {
             progressPanel.addLine("Failed to verify by thalia root. Verifying by surfnet root.");
             try {
                 progressPanel.addLine("Verifying by Surfnet root...");
-                result = verifySurfnetRoot(cs);
+                try {
+                    result = verifySurfnetRoot(cs);
+                } catch (InfoException e) {
+                    progressPanel.addLine("Verifying failed with InfoException. Contact the identificaatcie");
+                    waitOnProgress();
+                    return;
+                } catch (IOException e) {
+                    progressPanel.addLine("Verifying failed with IOException Contact the identificaatcie");;
+                    waitOnProgress();
+                    return;
+                }
             } catch (CredentialsException e) {
                 progressPanel.addLine("Verification of Surfnet Root failed. Perhaps the PIN code was wrong.");
                 waitOnProgress();
@@ -390,76 +410,60 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
     }
 
-    public JsonObject verifySurfnetRoot(CardService cs) throws CredentialsException{
-        try {
+    public JsonObject verifySurfnetRoot(CardService cs) throws CredentialsException, InfoException, IOException {
 
-            IdemixVerificationDescription vd = new IdemixVerificationDescription(
-                    "Surfnet", "rootAll");
-            Attributes attr = new IdemixCredentials(cs).verify(vd);
-            if (attr == null)
-            {
-                throw new CredentialsException();
-            }
-            String SurfnetRoot = new String(attr.get("userID"));
-            String mode = "student_number";
-            String value = SurfnetRoot.substring(0,8);
-
-            StringBuilder sb = new StringBuilder();
-            Formatter formatter = new Formatter(sb);
-            formatter.format("https://thalia.nu/api/irma_api.php?apikey=%s&%s=%s",apikey,mode,value);
-            HttpResponse response = transport.createRequestFactory().buildGetRequest(new GenericUrl(sb.toString())).execute();
-            JsonParser jp = new JsonParser();
-
-            JsonObject jo = jp.parse(response.parseAsString()).getAsJsonObject();
-            if(jo.get("status").getAsString().equals("ok"))
-            {
-                return jo;
-            }
-
-
-        } catch (InfoException e) {
-            e.printStackTrace();
-        } catch (CredentialsException e) {
-            return null;
-        } catch (IOException e) {
-            e.printStackTrace();
+        IdemixVerificationDescription vd = new IdemixVerificationDescription(
+                "Surfnet", "rootAll");
+        Attributes attr = new IdemixCredentials(cs).verify(vd);
+        if (attr == null)
+        {
+            throw new CredentialsException();
         }
+        String SurfnetRoot = new String(attr.get("userID"));
+        String mode = "student_number";
+        String value = SurfnetRoot.substring(0,8);
+
+        StringBuilder sb = new StringBuilder();
+        Formatter formatter = new Formatter(sb);
+        formatter.format("https://thalia.nu/api/irma_api.php?apikey=%s&%s=%s",apikey,mode,value);
+        HttpResponse response = transport.createRequestFactory().buildGetRequest(new GenericUrl(sb.toString())).execute();
+        JsonParser jp = new JsonParser();
+
+        JsonObject jo = jp.parse(response.parseAsString()).getAsJsonObject();
+        if(jo.get("status").getAsString().equals("ok"))
+        {
+            return jo;
+        }
+
+
         return null;
     }
 
-    public JsonObject verifyThaliaRoot(CardService cs) throws CredentialsException{
-        try {
+    public JsonObject verifyThaliaRoot(CardService cs) throws CredentialsException, InfoException, IOException {
 
-            IdemixVerificationDescription vd = new IdemixVerificationDescription(
-                    "Thalia", "rootAll");
-            Attributes attr = new IdemixCredentials(cs).verify(vd);
-            if (attr == null)
-            {
-                throw new CredentialsException();
-            }
-            String ThaliaUser = new String(attr.get("userID"));
-            String mode = "thalia_username";
-
-            StringBuilder sb = new StringBuilder();
-            Formatter formatter = new Formatter(sb);
-            formatter.format("https://thalia.nu/api/irma_api.php?apikey=%s&%s=%s",apikey,mode,ThaliaUser);
-            HttpResponse response = transport.createRequestFactory().buildGetRequest(new GenericUrl(sb.toString())).execute();
-            JsonParser jp = new JsonParser();
-
-            JsonObject jo = jp.parse(response.parseAsString()).getAsJsonObject();
-            if(jo.get("status").getAsString().equals("ok"))
-            {
-                return jo;
-            }
-
-
-        } catch (InfoException e) {
-            e.printStackTrace();
-        } catch (CredentialsException e) {
-            return null;
-        } catch (IOException e) {
-            e.printStackTrace();
+        IdemixVerificationDescription vd = new IdemixVerificationDescription(
+                "Thalia", "rootAll");
+        Attributes attr = new IdemixCredentials(cs).verify(vd);
+        if (attr == null)
+        {
+            throw new CredentialsException();
         }
+        String ThaliaUser = new String(attr.get("userID"));
+        String mode = "thalia_username";
+
+        StringBuilder sb = new StringBuilder();
+        Formatter formatter = new Formatter(sb);
+        formatter.format("https://thalia.nu/api/irma_api.php?apikey=%s&%s=%s",apikey,mode,ThaliaUser);
+        HttpResponse response = transport.createRequestFactory().buildGetRequest(new GenericUrl(sb.toString())).execute();
+        JsonParser jp = new JsonParser();
+
+        JsonObject jo = jp.parse(response.parseAsString()).getAsJsonObject();
+        if(jo.get("status").getAsString().equals("ok"))
+        {
+            return jo;
+        }
+
+
         return null;
     }
 }
