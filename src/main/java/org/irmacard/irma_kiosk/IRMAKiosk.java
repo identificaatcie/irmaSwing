@@ -184,11 +184,11 @@ public class IRMAKiosk implements ActionListener, Runnable {
             waitOnProgress();
             return;
         } catch (InfoException e) {
-            progressPanel.addLine("Issuing failed. Contct the Identificaatcie");
+            progressPanel.addLine("Issuing failed. Contact the Identificaatcie");
             waitOnProgress();
             return;
         } catch (CardServiceException e) {
-            progressPanel.addLine("Issuing failed. Contct the Identificaatcie");
+            progressPanel.addLine("Issuing failed. Contact the Identificaatcie");
             waitOnProgress();
             return;
         }
