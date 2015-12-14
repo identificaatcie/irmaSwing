@@ -34,4 +34,9 @@ public class ProgressPanel extends JPanel{
         progress.append(line + "\n");
         invalidate();
     }
+
+	public void add(String line) {
+		progress.append(line);
+		invalidate();
+	}
 }

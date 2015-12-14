@@ -258,10 +258,19 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
             try {
                 terminal = terminalList.get(readerNr);
+				if (!terminal.isCardPresent()) {
+					progressPanel.add("Waiting for insertion of card");
+					while (!terminal.waitForCardPresent(1000)) {
+						progressPanel.add(".");
+					}
+					progressPanel.addLine("");
+				}
                 return new TerminalCardService(terminal);
             } catch (IndexOutOfBoundsException e) {
                 throw new IllegalArgumentException("Invalid PCSC reader Nr: pcsc://" + readerNr);
-            }
+            } catch (CardException e){
+				throw new InfoException("Card Exception" + e.getMessage());
+			}
         } else {
             return null; // TODO error handling
         }
