@@ -56,7 +56,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
     private HttpTransport transport;
     private JsonObjectParser jsonObjectParser;
     private String apikey = "";
-    private final Boolean debug = true;
+    private final Boolean debug = false; // true for json, false for hardware
     private CardService cs;
     private IRMACard card;
     private JsonObject result;
@@ -419,6 +419,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
         CredentialDescription cd = DescriptionStore.getInstance().
                 getCredentialDescriptionByName("Thalia", "thalia");
+        System.out.println(cd.getIssuerDescription().getName());
         IdemixSecretKey isk = IdemixKeyStore.getInstance().getSecretKey(cd);
 
         String userID = result.get("username").getAsString();
@@ -486,10 +487,16 @@ public class IRMAKiosk implements ActionListener, Runnable {
 
         IdemixVerificationDescription vd = new IdemixVerificationDescription(
                 "Thalia", "rootAll");
-        Attributes attr = new IdemixCredentials(cs).verify(vd);
-        if (attr == null)
-        {
-            throw new CredentialsException();
+        System.out.println("STEP 1");
+        Attributes attr = null;
+        try {
+            attr = new IdemixCredentials(cs).verify(vd);
+        } catch (CredentialsException e) {
+           return null;
+        }
+
+        if (attr == null) {
+            return null;
         }
         String ThaliaUser = new String(attr.get("userID"));
         String mode = "thalia_username";
@@ -501,8 +508,7 @@ public class IRMAKiosk implements ActionListener, Runnable {
         JsonParser jp = new JsonParser();
 
         JsonObject jo = jp.parse(response.parseAsString()).getAsJsonObject();
-        if(jo.get("status").getAsString().equals("ok"))
-        {
+        if(jo.get("status").getAsString().equals("ok")) {
             return jo;
         }
 
